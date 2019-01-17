@@ -2,11 +2,15 @@
 
 #1. Define profit as a function of theta, w and p
 #2. Equate this to zero to find profit cutoff
+#3. Find the value function of a given signal
+#4. Find labor demand
 
 import numpy as np
 from scipy.optimize import brentq
 from scipy.optimize import fminbound
-from scipy.integrate import integrate
+import scipy.integrate as integrate
+from scipy.stats import lognorm
+from math import log
 
 
 alp = 0.65
@@ -25,6 +29,13 @@ tauy = 0.293
 ff = 0.5
 kapf = 0.129
 kapi = 0.349
+sig = 0.245
+entrycf = 15
+entryci = 10
+numin = 7.7
+numax = 100
+xi = 3.9
+
 
 def labori(the):
 
@@ -32,6 +43,7 @@ def labori(the):
         return p*the*alp*(x**(alp-1)) - w - 2*w*(bi**(-1))*x
 
     return brentq(foc, lmin, lmax)
+
 
 def profiti(the):
 
@@ -54,7 +66,7 @@ def profitf(the):
 
     minimiser, minimand, ierr, numfunc =  fminbound(payofff, lmin, lmax, full_output=1)
 
-    return minimand - ff
+    return -minimand - ff
 
 def laborf(the):
 
@@ -73,11 +85,57 @@ def laborf(the):
 
     return minimiser
 
-cutoffi = brentq(profiti, themin, themax)
-cutofff = brentq(profitf, themin, themax)
+cutoffthei = brentq(profiti, themin, themax)
+cutoffthef = brentq(profitf, themin, themax)
 
 def vali(the):
-     return max(0, profiti(the)/kapi)
+    return max(0, profiti(the)/kapi)
 
 def valf(the):
     return max(0, profitf(the)/kapf)
+
+def valsigi(nu):
+    result = integrate.quad(lambda x: vali(x)*lognorm.pdf(x-log(nu), sig), 1,10)
+    return result[0]
+
+def valsigf(nu):
+    result = integrate.quad(lambda x: valf(x)*lognorm.pdf(x-log(nu), sig), 1,10)
+    return result[0]
+
+entrynui = brentq(lambda x: valsigi(x)-entryci, numin, numax)
+print(entrynui)
+
+# entrynuf = brentq(lambda x: valsigf(x)-entrycf, numin, numax)
+# print(entrynuf)
+
+cutoffnu = brentq(lambda x: (valsigf(x)-entrycf) - (valsigi(x)-entryci), numin, numax)
+print(cutoffnu)
+
+def df(nu):
+
+    if nu < cutoffnu:
+        return 0
+    else:
+        result = integrate.quad(lambda x: (max(laborf(x)-lbar,0))*lognorm.pdf(x-log(nu),sig), 1, 10, epsabs = 1e-5)
+        return result[0]
+
+
+def di(nu):
+
+    if nu < entrynui:
+        return 0
+    elif nu < cutoffnu:
+        result = integrate.quad(lambda x: labori(x)*lognorm.pdf(x-log(nu),sig), 1, 10, epsabs = 1e-5)
+        return result[0]
+    else:
+        result = integrate.quad(lambda x: min(lbar,laborf(x))*lognorm.pdf(x-log(nu),sig), 1, 10, epsabs = 1e-5)
+        return result[0]
+
+
+demandi = integrate.quad(lambda x: di(x)*xi*(x**(-xi-1)) * numin**(xi), numin, np.inf, epsabs = 1e-5)
+demandf = integrate.quad(lambda x: df(x)*xi*(x**(-xi-1)) * numin**(xi), numin, np.inf, epsabs = 1e-5)
+print(demandi)
+print(demandf)
+
+# print(valsigi(7.7))
+# print(valsigi(100))
